@@ -12,24 +12,34 @@ import torch.optim as optim
 from torch.autograd import Variable
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Subset
+from transformers import BertTokenizer
 
 class ImageCaptionDataset(Dataset):
     def __init__(self, root_dir,  captions_file, tokenizer, transform=None):
         self.root_dir = root_dir
-        self.captions_file = captions_file
+        if isinstance(captions_file, str):
+            if captions_file.endswith('.csv'):
+                self.captions_df = pd.read_csv(captions_file)
+            else:
+                self.captions_df = pd.read_csv(captions_file, sep='\t', header=None, names=['image', 'caption'])
+        else:
+            self.captions_df = captions_file
+        
         self.tokenizer = tokenizer
         self.transform = transform
         
     def __len__(self):
-        return len(self.captions_file)
+        return len(self.captions_df)
     
     def __getitem__(self, idx):
-        img_name = self.captions_file.iloc[idx, 0]
-        caption = self.captions_file.iloc[idx, 1]
+        img_name = self.captions_df.iloc[idx, 0]
+        caption = self.captions_df.iloc[idx, 1]
 
-        img_path = f"{self.root_dir}/{img_name}"
+        # img_path = f"{self.root_dir}/{img_name}"
+        img_path = os.path.join(self.root_dir, img_name)
+
+
         image = Image.open(img_path).convert('RGB')
-
         if self.transform is not None:
             image = self.transform(image)
 
@@ -42,11 +52,12 @@ class ImageCaptionDataset(Dataset):
     def custom_collate_fn(batch):
         images, captions = zip(*batch)
         images = torch.stack(images, dim=0)
-        captions = torch.nn.utils.rnn.pad_sequence(captions, batch_first=True, padding_value=0)
-
-from torch.utils.data import DataLoader, Subset
-from torchvision import transforms
-from transformers import BertTokenizer
+        # captions = torch.nn.utils.rnn.pad_sequence(captions, batch_first=True, padding_value=0)
+        
+        # Since we're using padding='max_length', all captions should be the same length
+        # But we can still use pad_sequence for robustness
+        captions = torch.stack(captions, dim=0)  # Stack instead of pad_sequence since they're same length
+        return images, captions
 
 # using BERT tokenizer
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -55,6 +66,7 @@ tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # ImageNet normalization
 ])
 
 # Load the dataset
@@ -63,8 +75,12 @@ captions_file = '/data/captions.txt'
 dataset = ImageCaptionDataset(root_dir=root_dir, captions_file=captions_file, tokenizer=tokenizer, transform=transform)
 
 # a subset of the dataset with 5000 samples
-subset_indices = list(range(5000))
+subset_indices = list(range(min(5000, len(dataset))))  # Ensure we don't exceed dataset size
 subset = Subset(dataset, subset_indices)
+
+# Define train/test split ratios
+train_size = 0.8
+test_size = 0.2
 
 train_indices, test_indices = train_test_split(subset_indices, train_size=train_size, test_sizze=test_size, random_state=42)
 
