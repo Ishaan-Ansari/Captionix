@@ -23,28 +23,35 @@ Here's what the preprocessing looks like:
 
 ```python 
 class ImageCaptionDataset(Dataset):
-    def __init__(self, root_dir, captions_file, tokenizer, transform=None):
+    def __init__(self, root_dir,  captions_file, tokenizer, transform=None):
         self.root_dir = root_dir
-        self.captions_file = pd.read_csv(captions_file)
+        if isinstance(captions_file, str):
+            if captions_file.endswith('.csv'):
+                self.captions_df = pd.read_csv(captions_file)
+            else:
+                self.captions_df = pd.read_csv(captions_file, sep='\t', header=None, names=['image', 'caption'])
+        else:
+            self.captions_df = captions_file
+        
         self.tokenizer = tokenizer
         self.transform = transform
-
+        
     def __len__(self):
-        return len(self.captions_file)
-
+        return len(self.captions_df)
+    
     def __getitem__(self, idx):
-        img_name = self.captions_file.iloc[idx, 0]
-        caption = self.captions_file.iloc[idx, 1]
+        img_name = self.captions_df.iloc[idx, 0]
+        caption = self.captions_df.iloc[idx, 1]
 
-        img_path = f"{self.root_dir}/{img_name}"
-        image = Image.open(img_path).convert("RGB")
+        img_path = os.path.join(self.root_dir, img_name)
 
+        image = Image.open(img_path).convert('RGB')
         if self.transform is not None:
             image = self.transform(image)
 
         # Tokenize the caption
-        caption_tokens = self.tokenizer(caption, padding='max_length', max_length=30, truncation=True, return_tensors="pt")
-        caption_tensor = caption_tokens['input_ids'].squeeze()  # Remove extra dimension
+        caption_tokens = self.tokenizer(caption, padding='max_length', max_length=30, truncation=True, return_tensors='pt')
+        caption_tensor = caption_tokens['input_ids'].squeeze(0)  # Remove extra dimension
 
         return image, caption_tensor
 ```
