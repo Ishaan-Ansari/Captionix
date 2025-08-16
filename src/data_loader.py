@@ -4,7 +4,7 @@ import os
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
-import torchvision.transforms as transform
+import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import torch.nn as nn
 from PIL import Image
@@ -82,12 +82,12 @@ subset = Subset(dataset, subset_indices)
 train_size = 0.8
 test_size = 0.2
 
-train_indices, test_indices = train_test_split(subset_indices, train_size=train_size, test_sizze=test_size, random_state=42)
+train_indices, test_indices = train_test_split(subset_indices, train_size=train_size, test_size=test_size, random_state=42)
 
 train_subset = Subset(subset, train_indices)
 test_subset = Subset(subset, test_indices)
 
 # Create DataLoaders
-train_loader = DataLoader(train_subset, batch_size=32, shuffle=True, collate_fn=cusstom_collate_fn)
+train_loader = DataLoader(train_subset, batch_size=32, shuffle=True, collate_fn=custom_collate_fn)
 test_loader = DataLoader(test_subset, batch_size=32, shuffle=False, collate_fn=custom_collate_fn)
 
