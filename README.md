@@ -1,5 +1,68 @@
-# image-captioning
-Generating Captions for images using CNN &amp; LSTM on Flickr8K dataset.
+# Image Captioning 
+
+> [!NOTE]
+>  
+> ... Idea of building this project stems from curiosity to understand more about CNN, LSTM, and Attention mech.
+> 
+> ... this is why i decided to build an image-captioning model.
+> 
+> ... image -> image-cap-model -> caption. 
+
+
+# Introduction
+
+## Dataset 
+
+**Flickr8k**
+
+- It has around 8k images with their corresponding captions; here I'm using only 5k.
+
+### Data Loader 
+
+Here's what the preprocessing looks like:
+
+```python 
+class ImageCaptionDataset(Dataset):
+    def __init__(self, root_dir, captions_file, tokenizer, transform=None):
+        self.root_dir = root_dir
+        self.captions_file = pd.read_csv(captions_file)
+        self.tokenizer = tokenizer
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.captions_file)
+
+    def __getitem__(self, idx):
+        img_name = self.captions_file.iloc[idx, 0]
+        caption = self.captions_file.iloc[idx, 1]
+
+        img_path = f"{self.root_dir}/{img_name}"
+        image = Image.open(img_path).convert("RGB")
+
+        if self.transform is not None:
+            image = self.transform(image)
+
+        # Tokenize the caption
+        caption_tokens = self.tokenizer(caption, padding='max_length', max_length=30, truncation=True, return_tensors="pt")
+        caption_tensor = caption_tokens['input_ids'].squeeze()  # Remove extra dimension
+
+        return image, caption_tensor
+```
+
+## Architecture
+
+> [!IMPORTANT]
+>
+> Encoder(resnet50) -> extracts features from images
+>
+> Attention(block) -> Attention Block focuses on important parts of images with respect to captions.
+>
+> Decoder(lstms) -> generates captions based on image features.
+
+
+#  
+
+> [!NOTE]
 
 
 # Reference 
