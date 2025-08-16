@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision import models
+from torchvision import models
 from transformers import BertTokenizer
 
 class EncoderCNN(nn.Module):
