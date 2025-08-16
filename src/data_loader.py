@@ -63,7 +63,7 @@ captions_file = '/data/captions.txt'
 dataset = ImageCaptionDataset(root_dir=root_dir, captions_file=captions_file, tokenizer=tokenizer, transform=transform)
 
 # a subset of the dataset with 5000 samples
-subset_indices = list(range(5000)
+subset_indices = list(range(5000))
 subset = Subset(dataset, subset_indices)
 
 train_indices, test_indices = train_test_split(subset_indices, train_size=train_size, test_sizze=test_size, random_state=42)
