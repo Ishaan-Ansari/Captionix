@@ -59,3 +59,26 @@ def predict_caption(image_path, model, tokenizer, transform, max_length=50):
     caption = []
     alphas = []
 
+    for _ in range(max_len):
+        alpha, context = model.decoder.attention(features, h)
+        alphas.append(alpha.cpu().detach().numpy())
+
+        lstm_input = torch.cat((embeds, context), dim=1)
+        h, c = model.decoder.lstm_cell(lstm_input, (h, c))
+        
+
+        output = model.decoder.fcn(model.decoder.drop(h))
+        predicted_word_idx = output.argmax(dim=1)
+
+        captions.append(predicted_word_idx.item())
+
+
+        # break if [SEP] token is generated
+        if predicted_word_idx.item() == tokenizer.sep_token_id:
+            break
+
+
+        embeds = model.decoder.embedding(predicted_word_idx.unsqueeze(0))
+
+    caption = tokenizer.decode(caption, skip_special_tokens=True)
+    return image, caption
