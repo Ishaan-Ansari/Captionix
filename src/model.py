@@ -7,13 +7,14 @@ from transformers import BertTokenizer
 class EncoderCNN(nn.Module):
     def __init__(self, embed_size):
         super().__init__()
-        resnet = models.resnet50(pretrained=True)
+        # resnet = models.resnet50(pretrained=True)
+        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         # freeze resnet parameters to prevent updating during training
         for param in resnet.parameters():
-            param.requires_grad(False)
+            param.requires_grad_(False)
         
-        nodules = list(resnet.children())[:-2]  # remove the last two layers (avgpool and fc)
-        self.resnet = nn.Sequential(*nodules)
+        modules = list(resnet.children())[:-2]  # remove the last two layers (avgpool and fc)
+        self.resnet = nn.Sequential(*modules)
 
     def forward(self, images):
         features = self.resnet(images)
@@ -33,9 +34,9 @@ class Attention(nn.Module):
 
     def forward(self, features, hidden_state):
         # calculate attention weights
-        u_hs = self.U(features)
-        w_ah = self.W(hidden_state)
-        combined_states = torch.tanh(u_hs + w_ah.unsqueeze(1))
+        u_hs = self.U(hidden_state)
+        w_ah = self.W(features)
+        combined_states = torch.tanh(u_hs.unsqueeze(1) + w_ah)
         attention_scores = self.A(combined_states)  # (batch_size, seq_len)
         attention_scores = attention_scores.squeeze(2)    
         alpha = F.softmax(attention_scores, dim=1)  # normalize scores
@@ -45,11 +46,13 @@ class Attention(nn.Module):
         return alpha, attention_weights
 
 class DecoderRNN(nn.Module):    
-    def __init__(self, embed_size, attention_dim, encoder_dim, decoder_dim, dropout=0.3):
+    def __init__(self, embed_size, attention_dim, encoder_dim, decoder_dim, vocab_size=None, dropout=0.3):
         super().__init__()
+        self.encoder_dim = encoder_dim
         self.attention = Attention(encoder_dim, decoder_dim, attention_dim)
         # embedding layer using BERT tokenizer vocabulary
-        self.embedding = nn.Embedding(len(BertTokenizer.from_pretrained('bert-base-uncased')), embed_size)
+        # self.embedding = nn.Embedding(len(BertTokenizer.from_pretrained('bert-base-uncased')), embed_size)
+        self.embedding = nn.Embedding(vocab_size, embed_size) 
         # initialize hidden state and cell state
         self.init_h = nn.Linear(encoder_dim, decoder_dim)
         self.init_c = nn.Linear(encoder_dim, decoder_dim)
@@ -60,14 +63,17 @@ class DecoderRNN(nn.Module):
         self.drop = nn.Dropout(dropout)
 
     def forward(self, features, captions):
-        embeds = self.embedding(captions)  # (batch_size, seq_len, embed_size)
-        h, c = self.init_hidden_state(features)
-        seq_length = captions.size(1)-1
-        batch_size = captins.size(0)
+        captions_for_embedding = captions[:, :-1]  
+
+        batch_size = features.size(0)
+        embeds = self.embedding(captions_for_embedding)  # (batch_size, seq_len, embed_size)
+        seq_length = captions_for_embedding.size(1)
         num_features = features.size(1)
 
+        h, c = self.init_hidden_state(features)
+
         # initialize tensors to store predictions and attention weights
-        preds = torch.zeros(batch_size, seq_length, self.embedding.num_embeddings).to(features.device)
+        preds = torch.zeros(batch_size, seq_length, self.fcn.out_features).to(features.device)
         alphas = torch.zeros(batch_size, seq_length, num_features).to(features.device)
 
         # generate sequence
@@ -88,15 +94,16 @@ class DecoderRNN(nn.Module):
         return h, c
     
 class EncoderDecoder(nn.Module):
-    def __init__(self, embed_size, attention_dim, encoder_dim, decoder_dim, dropout=0.3):
+    def __init__(self, embed_size, vocab_size, attention_dim, encoder_dim, decoder_dim, dropout=0.3):
         super().__init__()
         self.encoder = EncoderCNN(embed_size)
         self.decoder = DecoderRNN(
             embed_size=embed_size, 
+            vocab_size=vocab_size,
             attention_dim=attention_dim, 
             encoder_dim=encoder_dim, 
             decoder_dim=decoder_dim, 
-            drop_prob=dropout
+            dropout=dropout
         )
 
     def forward(self, images, captions):
@@ -104,3 +111,22 @@ class EncoderDecoder(nn.Module):
         features = self.encoder(images)
         outputs, alphas = self.decoder(features, captions)
         return outputs, alphas
+    
+if __name__ == "__main__":
+    # Example usage
+    embed_size = 256
+    vocab_size = 10000  # Example vocabulary size
+    attention_dim = 128
+    encoder_dim = 2048  # ResNet50 output dimension
+    decoder_dim = 512
+
+    model = EncoderDecoder(embed_size, vocab_size, attention_dim, encoder_dim, decoder_dim, dropout=0.3)
+    
+    batch_size = 4
+    seq_length = 20
+    images = torch.randn(batch_size, 3, 224, 224)  
+    captions = torch.randint(0, vocab_size, (batch_size, seq_length))  
+
+    outputs, alphas = model(images, captions)
+    print(outputs.shape)  
+    print(alphas.shape)
